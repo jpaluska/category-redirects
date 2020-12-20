@@ -128,7 +128,7 @@ def addToCategory(title, category):
 	else:
 		print("Page is not in %s! Adding %s..." % (category, title))
 		page.text += category
-		page.save("Add to %s", % (category))	
+		page.save("Add to %s" % (category))	
 
 if __name__ == '__main__':
 	for title in getRedirects(getURL()):
