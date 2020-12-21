@@ -27,22 +27,25 @@ def getRedirects(URL):
 	Returns:
 		output (list): a list with titles of pages containing redirects
 	"""
+	output = set()
+	session = requests.Session()
+
 	for ns in range(-2, 15):
 		PARAMS = {
 		"action": "query",
 		"generator": "allredirects",
-		"arnamespace": ns,
+		"garnamespace": ns,
 		"format": "json"
 		}
 
-		session = requests.Session()
 		request = session.get(url=URL, params=PARAMS, verify=False)
 		json = request.json()
 
-		output = set()
-
-		for page in json["query"]["pages"]:
-			output.add(json["query"]["pages"][page]["title"])
+		try:
+			for page in json["query"]["pages"]:
+				output.add(json["query"]["pages"][page]["title"])
+		except:
+			continue
 
 		try:
 			continueValue = json["continue"]["garcontinue"]
@@ -53,7 +56,7 @@ def getRedirects(URL):
 			PARAMS = {
 			"action": "query",
 			"generator": "allredirects",
-			"arnamespace": ns,
+			"garnamespace": ns,
 			"format": "json",
 			"garcontinue": continueValue
 			}
@@ -68,6 +71,7 @@ def getRedirects(URL):
 				continueValue = json["continue"]["garcontinue"]
 			except:
 				continueValue = ''
+
 	PARAMS = {
 	"action": "query",
 	"list": "categorymembers",
