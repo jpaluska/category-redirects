@@ -13,8 +13,8 @@ def getURL():
 		URL (str): API url of the wiki
 	"""
 
-	site = pywikibot.getSite()
-	URL = site.protocol() + "://" + site.hostname() + site.scriptpath() + "/api.php"
+	site = pywikibot.Site
+	URL = site.protocol() + "://" + site.hostname() + site.apipath()
 	return URL
 
 def getRedirects(URL):
@@ -63,9 +63,12 @@ def getRedirects(URL):
 
 			request = session.get(url=URL, params=PARAMS, verify=False)
 			json = request.json()
-
-			for page in json["query"]["pages"]:
-				output.add(json["query"]["pages"][page]["title"])
+			
+			try:
+				for page in json["query"]["pages"]:
+					output.add(json["query"]["pages"][page]["title"])
+			except:
+				break
 
 			try:
 				continueValue = json["continue"]["garcontinue"]
