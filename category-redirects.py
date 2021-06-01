@@ -2,8 +2,15 @@ import pywikibot
 import requests
 import json
 import urllib3
+import os
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+#Number of pages to process per run
+BATCH_SIZE = 5
+
+#Name/path of file containing title of last processed page and namespace
+FILE_NAME = "cat-redirects-last.txt"
 
 def getURL():
 	"""
@@ -13,8 +20,8 @@ def getURL():
 		URL (str): API url of the wiki
 	"""
 
-	site = pywikibot.Site
-	URL = site.protocol() + "://" + site.hostname() + site.apipath()
+	site = pywikibot.getSite()
+	URL = site.protocol() + "://" + site.hostname() + site.scriptpath() + "/api.php"
 	return URL
 
 def getRedirects(URL):
@@ -27,55 +34,53 @@ def getRedirects(URL):
 	Returns:
 		output (list): a list with titles of pages containing redirects
 	"""
+
+	if not os.path.isfile(FILE_NAME):
+		last = ''
+		ns = -2
+	else:
+		with open(FILE_NAME) as reader:
+			last = reader.readline()
+			ns = int(reader.readline())
+
 	output = set()
 	session = requests.Session()
 
-	for ns in range(-2, 15):
-		PARAMS = {
-		"action": "query",
-		"generator": "allredirects",
-		"garnamespace": ns,
-		"format": "json"
-		}
+	PARAMS = {
+	"action": "query",
+	"generator": "allredirects",
+	"garnamespace": ns,
+	"garlimit": BATCH_SIZE,
+	"format": "json",
+	"garcontinue": last
+	}
+	
+	if not last or last == '\n':
+		del PARAMS["garcontinue"]
 
-		request = session.get(url=URL, params=PARAMS, verify=False)
-		json = request.json()
-
-		try:
-			for page in json["query"]["pages"]:
-				output.add(json["query"]["pages"][page]["title"])
-		except:
-			continue
-
-		try:
-			continueValue = json["continue"]["garcontinue"]
-		except:
-			continueValue = ''
-
-		while continueValue:
-			PARAMS = {
-			"action": "query",
-			"generator": "allredirects",
-			"garnamespace": ns,
-			"format": "json",
-			"garcontinue": continueValue
-			}
-
-			request = session.get(url=URL, params=PARAMS, verify=False)
-			json = request.json()
-			
+	request = session.get(url=URL, params=PARAMS, verify=False)
+	json = request.json()
+	
+	try:	
+		for page in json["query"]["pages"]:
 			try:
-				for page in json["query"]["pages"]:
-					output.add(json["query"]["pages"][page]["title"])
+				output.add(json["query"]["pages"][page]["title"])
 			except:
 				break
+	except:
+		print("NOTHING IN NAMESPACE")		
 
-			try:
-				continueValue = json["continue"]["garcontinue"]
-			except:
-				continueValue = ''
+	with open(FILE_NAME, "w+") as writer:
+		try:	
+			writer.write(json["continue"]["garcontinue"] + "\n" + str(ns))
+		except:
+			if ns < 15:
+				ns += 1
+			else:
+				ns = -2
+			writer.write('' + "\n" + str(ns))
 
-	PARAMS = {
+	CATS_PARAMS = {
 	"action": "query",
 	"list": "categorymembers",
 	"cmtitle": "Category:Redirects",
@@ -83,7 +88,7 @@ def getRedirects(URL):
 	"format": "json"
 	}
 
-	request = session.get(url=URL, params=PARAMS, verify=False)
+	request = session.get(url=URL, params=CATS_PARAMS, verify=False)
 	json = request.json()
 
 	remove = set()
@@ -96,7 +101,7 @@ def getRedirects(URL):
 		continueValue = ''
 
 	while continueValue:
-		PARAMS = {
+		CATS_PARAMS = {
 		"action": "query",
 		"list": "categorymembers",
 		"cmtitle": "Category:Redirects",
@@ -105,7 +110,7 @@ def getRedirects(URL):
 		"cmcontinue": continueValue
 		}
 
-		request = session.get(url=URL, params=PARAMS, verify=False)
+		request = session.get(url=URL, params=CATS_PARAMS, verify=False)
 		json = request.json()
 
 		for page in json["query"]["categorymembers"]:
@@ -115,7 +120,7 @@ def getRedirects(URL):
 			continueValue = json["continue"]["cmcontinue"]
 		except:
 			continueValue = ''
-
+	
 	return output.difference(remove)
 
 def addToCategory(title, category):
@@ -126,6 +131,7 @@ def addToCategory(title, category):
 		title (str): the title of the page to be added to a category
 		category (str): the category to add the page to
 	"""
+
 	page = pywikibot.Page(pywikibot.Site(), title)
 	text = page.text
 	category = "[[Category:" + category + "]]" 
@@ -135,7 +141,7 @@ def addToCategory(title, category):
 	else:
 		print("Page is not in %s! Adding %s..." % (category, title))
 		page.text += category
-		page.save("Add to %s" % (category))	
+		page.save("Add to ")	
 
 if __name__ == '__main__':
 	for title in getRedirects(getURL()):
