@@ -3,6 +3,7 @@ import requests
 import json
 import urllib3
 import os
+import re
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -20,7 +21,7 @@ def getURL():
 		URL (str): API url of the wiki
 	"""
 
-	site = pywikibot.getSite()
+	site = pywikibot.Site()
 	URL = site.protocol() + "://" + site.hostname() + site.scriptpath() + "/api.php"
 	return URL
 
@@ -32,7 +33,7 @@ def getRedirects(URL):
 		URL (str): the API URL of the wiki
 	
 	Returns:
-		output (list): a list with titles of pages containing redirects
+	i	output (list): a list with titles of pages containing redirects
 	"""
 
 	if not os.path.isfile(FILE_NAME):
@@ -48,27 +49,21 @@ def getRedirects(URL):
 
 	PARAMS = {
 	"action": "query",
-	"generator": "allredirects",
-	"garnamespace": ns,
-	"garlimit": BATCH_SIZE,
 	"format": "json",
-	"garcontinue": last
+	"list": "allredirects",
+	"arunique": "1",
+	"arnamespace": "0",
+	"arlimit": BATCH_SIZE
 	}
-	
-	if not last or last == '\n':
-		del PARAMS["garcontinue"]
 
 	request = session.get(url=URL, params=PARAMS, verify=False)
 	json = request.json()
 	
-	try:	
-		for page in json["query"]["pages"]:
-			try:
-				output.add(json["query"]["pages"][page]["title"])
-			except:
-				break
-	except:
-		print("NOTHING IN NAMESPACE")		
+	if not "query" in json or not "allredirects" in json["query"]:
+		return ""
+
+	for page in json["query"]["allredirects"]:
+		output.add(page["title"])
 
 	with open(FILE_NAME, "w+") as writer:
 		try:	
@@ -132,17 +127,34 @@ def addToCategory(title, category):
 		category (str): the category to add the page to
 	"""
 
-	page = pywikibot.Page(pywikibot.Site(), title)
-	text = page.text
-	category = "[[Category:" + category + "]]" 
+	if title == " ":
+		print("Invaild Title")
+		return 
 
-	if text.find(category) != -1:
+	page = pywikibot.Page(pywikibot.Site(), title)
+	text = page.text 
+	
+	 
+
+	if match_category(category, text):
 		print("Page is already in %s! Skipping %s..." % (category, title))
 	else:
 		print("Page is not in %s! Adding %s..." % (category, title))
 		page.text += category
 		page.save("Add to ")	
 
-if __name__ == '__main__':
+def match_category(category, text):
+	
+	test = "\[{2}\s*Category\s*:\s*" + category + "\s*\]{2}"
+
+	return re.match(test, text, re.DOTALL | re.IGNORECASE)
+
+
+def main():
+
 	for title in getRedirects(getURL()):
 		addToCategory(title, "Redirects")
+
+
+if __name__ == '__main__':
+	main()
